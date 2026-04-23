@@ -7,6 +7,79 @@ import { RECOVERY_KNOWLEDGE } from './recovery-knowledge';
 const MODEL = 'claude-sonnet-4-5-20250929';
 const MAX_ROUNDS = 5;
 
+export interface KeyMetric {
+  label: string;
+  value: string;
+  note?: string;
+}
+
+export interface ReportSection {
+  heading: string;
+  body: string;
+}
+
+export interface AgentReport {
+  verdict: string;
+  verdict_tone: 'green' | 'yellow' | 'red';
+  key_metrics: KeyMetric[];
+  sections: ReportSection[];
+  action: string;
+}
+
+export interface AgentResult {
+  report: AgentReport;
+  tool_calls_used: string[];
+}
+
+const SUBMIT_REPORT_TOOL: Anthropic.Tool = {
+  name: 'submit_report',
+  description: 'Deliver your final structured report to the user. You MUST call this tool to submit your answer — never output plain text as your final response.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      verdict: {
+        type: 'string',
+        description: 'One sentence summarizing the key finding or assessment.',
+      },
+      verdict_tone: {
+        type: 'string',
+        enum: ['green', 'yellow', 'red'],
+        description: 'green = good/above baseline, red = poor/concerning, yellow = mixed or within normal range.',
+      },
+      key_metrics: {
+        type: 'array',
+        description: '3-6 of the most important data points from the retrieved data, formatted as display cards.',
+        items: {
+          type: 'object',
+          properties: {
+            label: { type: 'string', description: 'Short metric name, e.g. "Recovery Score" or "HRV"' },
+            value: { type: 'string', description: 'The value with unit, e.g. "82%" or "74 ms"' },
+            note: { type: 'string', description: 'Optional context, e.g. "↑ 8% vs 30-day avg" or "3 red days streak"' },
+          },
+          required: ['label', 'value'],
+        },
+      },
+      sections: {
+        type: 'array',
+        description: '1-3 analysis sections in prose. Each has a short heading and 2-4 sentences of body text. No bullet points.',
+        items: {
+          type: 'object',
+          properties: {
+            heading: { type: 'string' },
+            body: { type: 'string', description: 'Prose only. 2-4 sentences. No bullet points or markdown within this field.' },
+          },
+          required: ['heading', 'body'],
+        },
+      },
+      action: {
+        type: 'string',
+        description: 'One specific, concrete intervention the user should take today or tonight. Not a list — one thing.',
+      },
+    },
+    required: ['verdict', 'verdict_tone', 'key_metrics', 'sections', 'action'],
+  },
+};
+
 function buildSystemPrompt(): string {
   const knowledgeText = RECOVERY_KNOWLEDGE
     .map(e => `[${e.category}] ${e.fact}`)
@@ -14,36 +87,31 @@ function buildSystemPrompt(): string {
 
   return `You are the Atlas Health Recovery Coach — a personalized, evidence-based recovery and autonomic nervous system advisor for finance professionals.
 
-You have access to the user's real WHOOP recovery data (HRV, RHR, recovery score, SpO2, skin temp) and workout data through tools. Use the tools to ground every response in their actual data.
+You have access to the user's real WHOOP recovery data (HRV, RHR, recovery score, SpO2, skin temp) and workout data through tools. Always retrieve actual data before answering.
 
 Your approach:
-1. Always retrieve relevant data before answering — don't guess at numbers.
-2. Interpret HRV and recovery trends through the user's personal baseline, not population norms. HRV is highly individual.
+1. Call data tools first — never guess at numbers.
+2. Interpret HRV and recovery through the user's personal baseline, not population norms. HRV is highly individual.
 3. Translate findings into finance-specific decisions: risk appetite, decision quality, position sizing, cognitive load tolerance.
 4. Be direct and data-first. No filler.
-5. End every response with one concrete "do this next" action — a specific intervention, not a menu of options.
-6. Keep responses focused and under 400 words unless the analysis genuinely requires more.
-7. Write in prose, not bullet points. Use short paragraphs (2-4 sentences each). Reserve bullet lists only for genuinely enumerable things (e.g., 3+ discrete data points being listed). Do not fragment every sentence into its own bullet.
-8. Use bold sparingly — only for the single most important number or conclusion in a section, not for every data point or header. A response with 10 bolded phrases looks shouty.
-9. Structure: lead with the verdict in plain prose. Then one or two paragraphs of supporting analysis. Then the concrete "do this next" action. No need for headers like "Red flags:" or "Good news:" — let the prose flow.
-10. Flag concerning patterns (3+ consecutive red recovery days, HRV chronically 20%+ below baseline, sustained elevated RHR) but don't over-alarm.
-11. When citing numbers from tools, include date ranges.
+5. When you have gathered sufficient data, call submit_report to deliver your structured answer. You MUST call submit_report — never output plain text as your final response.
+6. In section bodies, write in prose (2-4 sentences). No bullet points within section bodies.
+7. verdict_tone: green if results are good or above baseline, red if poor or significantly below, yellow if mixed or within normal range.
+8. key_metrics: include 3-6 of the most significant numbers from the data, with notes showing direction vs baseline where relevant.
+9. Flag concerning patterns (3+ consecutive red recovery days, HRV 20%+ below baseline, sustained elevated RHR) but don't over-alarm.
+10. When citing numbers, include date ranges.
 
 Recovery science knowledge base:
 ${knowledgeText}`;
 }
 
-export interface AgentResult {
-  response: string;
-  tool_calls_used: string[];
-}
-
-function extractText(content: Anthropic.ContentBlock[]): string {
-  return content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map(b => b.text)
-    .join('');
-}
+const FALLBACK_REPORT: AgentReport = {
+  verdict: 'Could not complete analysis — please try again.',
+  verdict_tone: 'yellow',
+  key_metrics: [],
+  sections: [{ heading: 'Status', body: 'The analysis did not complete successfully. This may be a temporary issue.' }],
+  action: 'Try asking again in a moment.',
+};
 
 export async function askRecoveryAgent(userId: string, question: string): Promise<AgentResult> {
   const systemPrompt = buildSystemPrompt();
@@ -53,9 +121,12 @@ export async function askRecoveryAgent(userId: string, question: string): Promis
     { role: 'user', content: question },
   ];
 
-  const tools = RECOVERY_TOOL_DEFINITIONS as Anthropic.Tool[];
+  const tools: Anthropic.Tool[] = [
+    ...(RECOVERY_TOOL_DEFINITIONS as Anthropic.Tool[]),
+    SUBMIT_REPORT_TOOL,
+  ];
 
-  for (let round = 0; round < MAX_ROUNDS; round++) {
+  for (let round = 0; round <= MAX_ROUNDS; round++) {
     const response = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 1024,
@@ -64,15 +135,17 @@ export async function askRecoveryAgent(userId: string, question: string): Promis
       messages,
     });
 
-    if (response.stop_reason === 'end_turn') {
-      return { response: extractText(response.content), tool_calls_used: toolCallsUsed };
+    for (const block of response.content) {
+      if (block.type === 'tool_use' && block.name === 'submit_report') {
+        return {
+          report: block.input as AgentReport,
+          tool_calls_used: toolCallsUsed,
+        };
+      }
     }
 
-    if (response.stop_reason !== 'tool_use') {
-      return {
-        response: extractText(response.content) || 'I was unable to complete the analysis.',
-        tool_calls_used: toolCallsUsed,
-      };
+    if (response.stop_reason === 'end_turn' || response.stop_reason !== 'tool_use') {
+      break;
     }
 
     messages.push({ role: 'assistant', content: response.content });
@@ -80,31 +153,32 @@ export async function askRecoveryAgent(userId: string, question: string): Promis
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const block of response.content) {
       if (block.type !== 'tool_use') continue;
-
       toolCallsUsed.push(block.name);
       const result = await executeRecoveryTool(userId, block.name, block.input as Record<string, unknown>);
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: block.id,
-        content: result,
-      });
+      toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result });
     }
 
     messages.push({ role: 'user', content: toolResults });
   }
 
-  const finalResponse = await anthropic.messages.create({
+  // Nudge for one final submit_report call
+  const nudge = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 1024,
     system: systemPrompt,
+    tools,
+    tool_choice: { type: 'any' },
     messages: [
       ...messages,
-      { role: 'user', content: 'Please provide your final answer based on the data you have retrieved so far.' },
+      { role: 'user', content: 'You have gathered enough data. Call submit_report now with your findings.' },
     ],
   });
 
-  return {
-    response: extractText(finalResponse.content) || 'Analysis complete.',
-    tool_calls_used: toolCallsUsed,
-  };
+  for (const block of nudge.content) {
+    if (block.type === 'tool_use' && block.name === 'submit_report') {
+      return { report: block.input as AgentReport, tool_calls_used: toolCallsUsed };
+    }
+  }
+
+  return { report: FALLBACK_REPORT, tool_calls_used: toolCallsUsed };
 }

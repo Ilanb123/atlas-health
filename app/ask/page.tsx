@@ -1,9 +1,18 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
 
 type Coach = 'sleep' | 'recovery';
+
+interface KeyMetric { label: string; value: string; note?: string }
+interface ReportSection { heading: string; body: string }
+interface AgentReport {
+  verdict: string;
+  verdict_tone: 'green' | 'yellow' | 'red';
+  key_metrics: KeyMetric[];
+  sections: ReportSection[];
+  action: string;
+}
 
 const COACHES: { id: Coach; label: string; description: string }[] = [
   { id: 'sleep', label: 'Sleep Coach', description: 'Sleep stages, REM, deep sleep, efficiency' },
@@ -25,10 +34,16 @@ const STARTER_QUESTIONS: Record<Coach, string[]> = {
   ],
 };
 
+const TONE_STYLES: Record<'green' | 'yellow' | 'red', { bg: string; text: string; border: string; dot: string }> = {
+  green:  { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0', dot: '#22c55e' },
+  yellow: { bg: '#fffbeb', text: '#92400e', border: '#fde68a', dot: '#f59e0b' },
+  red:    { bg: '#fef2f2', text: '#991b1b', border: '#fecaca', dot: '#ef4444' },
+};
+
 export default function AskPage() {
   const [coach, setCoach] = useState<Coach>('sleep');
   const [question, setQuestion] = useState('');
-  const [response, setResponse] = useState<string | null>(null);
+  const [report, setReport] = useState<AgentReport | null>(null);
   const [toolsUsed, setToolsUsed] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +52,7 @@ export default function AskPage() {
   function switchCoach(next: Coach) {
     if (next === coach) return;
     setCoach(next);
-    setResponse(null);
+    setReport(null);
     setToolsUsed([]);
     setError(null);
     setQuestion('');
@@ -49,7 +64,7 @@ export default function AskPage() {
 
     setLoading(true);
     setError(null);
-    setResponse(null);
+    setReport(null);
     setToolsUsed([]);
 
     try {
@@ -66,7 +81,7 @@ export default function AskPage() {
         return;
       }
 
-      setResponse(data.response);
+      setReport(data.report);
       setToolsUsed(data.tool_calls_used ?? []);
     } catch {
       setError('Network error — please try again');
@@ -89,44 +104,9 @@ export default function AskPage() {
   }
 
   const activeCoach = COACHES.find(c => c.id === coach)!;
+  const tone = report ? TONE_STYLES[report.verdict_tone] : null;
 
   return (
-    <>
-    <style>{`
-      .md-content { color: #1a1a1a; font-size: 0.97rem; line-height: 1.75; }
-      .md-content p { margin: 0 0 14px; }
-      .md-content p:last-child { margin-bottom: 0; }
-      .md-content h1, .md-content h2, .md-content h3 {
-        font-family: Georgia, 'Times New Roman', serif;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        margin: 20px 0 8px;
-        color: #0d0d0d;
-      }
-      .md-content h1 { font-size: 1.3rem; }
-      .md-content h2 { font-size: 1.1rem; }
-      .md-content h3 { font-size: 1rem; }
-      .md-content strong { font-weight: 700; color: #0d0d0d; }
-      .md-content em { font-style: italic; }
-      .md-content ul, .md-content ol {
-        padding-left: 20px;
-        margin: 0 0 14px;
-      }
-      .md-content li { margin-bottom: 6px; line-height: 1.6; }
-      .md-content code {
-        background: #f5f5f4;
-        border-radius: 4px;
-        padding: 2px 6px;
-        font-size: 0.88em;
-        font-family: 'SF Mono', 'Fira Code', monospace;
-        color: #555;
-      }
-      .md-content hr {
-        border: none;
-        border-top: 1px solid #f0f0f0;
-        margin: 16px 0;
-      }
-    `}</style>
     <main style={styles.page}>
       <header style={styles.header}>
         <a href="/dashboard" style={{ textDecoration: 'none' }}>
@@ -144,10 +124,7 @@ export default function AskPage() {
             <button
               key={c.id}
               onClick={() => switchCoach(c.id)}
-              style={{
-                ...styles.tab,
-                ...(coach === c.id ? styles.tabActive : styles.tabInactive),
-              }}
+              style={{ ...styles.tab, ...(coach === c.id ? styles.tabActive : styles.tabInactive) }}
             >
               {c.label}
             </button>
@@ -156,7 +133,7 @@ export default function AskPage() {
 
         <p style={styles.subheading}>{activeCoach.description}</p>
 
-        {!response && !loading && (
+        {!report && !loading && (
           <div style={styles.starters}>
             {STARTER_QUESTIONS[coach].map(q => (
               <button key={q} style={styles.starterBtn} onClick={() => useStarter(q)}>
@@ -197,20 +174,48 @@ export default function AskPage() {
           </div>
         )}
 
-        {error && (
-          <div style={styles.errorBox}>{error}</div>
-        )}
+        {error && <div style={styles.errorBox}>{error}</div>}
 
-        {response && (
-          <div style={styles.responseBox}>
-            <div className="md-content">
-              <ReactMarkdown>{response}</ReactMarkdown>
+        {report && tone && (
+          <div style={styles.reportBox}>
+            {/* Verdict */}
+            <div style={{ ...styles.verdictBanner, background: tone.bg, border: `1px solid ${tone.border}` }}>
+              <span style={{ ...styles.verdictDot, background: tone.dot }} />
+              <p style={{ ...styles.verdictText, color: tone.text }}>{report.verdict}</p>
             </div>
 
+            {/* Key metrics grid */}
+            {report.key_metrics.length > 0 && (
+              <div style={styles.metricsGrid}>
+                {report.key_metrics.map((m, i) => (
+                  <div key={i} style={styles.metricCard}>
+                    <div style={styles.metricLabel}>{m.label}</div>
+                    <div style={styles.metricValue}>{m.value}</div>
+                    {m.note && <div style={styles.metricNote}>{m.note}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Analysis sections */}
+            {report.sections.map((s, i) => (
+              <div key={i} style={styles.section}>
+                <h3 style={styles.sectionHeading}>{s.heading}</h3>
+                <p style={styles.sectionBody}>{s.body}</p>
+              </div>
+            ))}
+
+            {/* Action card */}
+            <div style={styles.actionCard}>
+              <div style={styles.actionLabel}>Do this next</div>
+              <p style={styles.actionText}>{report.action}</p>
+            </div>
+
+            {/* Tools footer */}
             {toolsUsed.length > 0 && (
               <div style={styles.toolsFooter}>
                 <span style={{ color: '#bbb' }}>Data sources: </span>
-                {toolsUsed.map((t, i) => (
+                {[...new Set(toolsUsed)].map((t, i) => (
                   <span key={i} style={styles.toolTag}>{t.replace(/_/g, ' ')}</span>
                 ))}
               </div>
@@ -219,7 +224,7 @@ export default function AskPage() {
             <button
               style={styles.askAgainBtn}
               onClick={() => {
-                setResponse(null);
+                setReport(null);
                 setToolsUsed([]);
                 setQuestion('');
                 setTimeout(() => textareaRef.current?.focus(), 0);
@@ -231,7 +236,6 @@ export default function AskPage() {
         )}
       </div>
     </main>
-    </>
   );
 }
 
@@ -272,17 +276,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     fontFamily: 'inherit',
     cursor: 'pointer',
-    transition: 'background 0.15s, color 0.15s',
   },
-  tabActive: {
-    background: '#111',
-    color: '#fff',
-  },
-  tabInactive: {
-    background: '#fff',
-    color: '#666',
-    border: '1px solid #e5e5e5',
-  },
+  tabActive:   { background: '#111', color: '#fff' },
+  tabInactive: { background: '#fff', color: '#666', border: '1px solid #e5e5e5' },
   subheading: {
     color: '#888',
     fontSize: '0.88rem',
@@ -354,31 +350,119 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#dc2626',
     fontSize: '0.9rem',
   },
-  responseBox: {
+  reportBox: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  verdictBanner: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '12px',
+    borderRadius: '12px',
+    padding: '16px 20px',
+  },
+  verdictDot: {
+    width: '10px',
+    height: '10px',
+    borderRadius: '50%',
+    flexShrink: 0,
+    marginTop: '5px',
+  },
+  verdictText: {
+    margin: 0,
+    fontWeight: 700,
+    fontSize: '1.05rem',
+    lineHeight: 1.4,
+  },
+  metricsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))',
+    gap: '10px',
+  },
+  metricCard: {
     background: '#fff',
-    borderRadius: '16px',
-    padding: '28px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
+    borderRadius: '12px',
+    padding: '16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+  },
+  metricLabel: {
+    fontSize: '0.72rem',
+    fontWeight: 600,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.06em',
+    color: '#999',
+    marginBottom: '6px',
+  },
+  metricValue: {
+    fontSize: '1.5rem',
+    fontWeight: 700,
+    color: '#0d0d0d',
+    letterSpacing: '-0.02em',
+    lineHeight: 1,
+    marginBottom: '4px',
+  },
+  metricNote: {
+    fontSize: '0.75rem',
+    color: '#888',
+    marginTop: '4px',
+  },
+  section: {
+    background: '#fff',
+    borderRadius: '12px',
+    padding: '20px 24px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+  },
+  sectionHeading: {
+    fontSize: '0.8rem',
+    fontWeight: 700,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.07em',
+    color: '#999',
+    margin: '0 0 10px',
+  },
+  sectionBody: {
+    fontSize: '0.96rem',
+    lineHeight: 1.7,
+    color: '#1a1a1a',
+    margin: 0,
+  },
+  actionCard: {
+    background: '#0d0d0d',
+    borderRadius: '12px',
+    padding: '20px 24px',
+  },
+  actionLabel: {
+    fontSize: '0.72rem',
+    fontWeight: 700,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.1em',
+    color: '#888',
+    marginBottom: '8px',
+  },
+  actionText: {
+    fontSize: '0.97rem',
+    lineHeight: 1.6,
+    color: '#fff',
+    margin: 0,
+    fontWeight: 500,
   },
   toolsFooter: {
-    marginTop: '20px',
-    paddingTop: '16px',
-    borderTop: '1px solid #f0f0f0',
-    fontSize: '0.78rem',
     display: 'flex',
     flexWrap: 'wrap',
     gap: '6px',
     alignItems: 'center',
+    fontSize: '0.75rem',
+    paddingTop: '4px',
   },
   toolTag: {
-    background: '#f5f5f4',
+    background: '#ebebeb',
     borderRadius: '4px',
     padding: '2px 8px',
     color: '#888',
-    fontSize: '0.75rem',
+    fontSize: '0.72rem',
   },
   askAgainBtn: {
-    marginTop: '20px',
     background: 'transparent',
     border: '1px solid #e5e5e5',
     borderRadius: '8px',
@@ -387,5 +471,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#555',
     cursor: 'pointer',
     fontFamily: 'inherit',
+    alignSelf: 'flex-start',
   },
 };
