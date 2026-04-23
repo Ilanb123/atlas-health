@@ -75,6 +75,9 @@ export default function AskPage() {
       });
 
       const data = await res.json();
+      console.log('[ask] raw API response:', JSON.stringify(data, null, 2));
+      console.log('[ask] data.report:', data.report);
+      console.log('[ask] data.response:', (data as Record<string, unknown>).response);
 
       if (!res.ok) {
         setError(data.error || 'Something went wrong');

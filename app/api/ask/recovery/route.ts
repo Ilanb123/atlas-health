@@ -28,6 +28,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await askRecoveryAgent(userId, question);
+    console.log('[recovery-agent] result keys:', Object.keys(result));
+    console.log('[recovery-agent] result.report:', JSON.stringify(result.report ?? null));
+    console.log('[recovery-agent] tool_calls_used:', result.tool_calls_used);
     return Response.json(result);
   } catch (e) {
     console.error('[recovery-agent] error:', e);

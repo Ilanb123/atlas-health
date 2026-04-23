@@ -28,6 +28,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await askSleepAgent(userId, question);
+    console.log('[sleep-agent] result keys:', Object.keys(result));
+    console.log('[sleep-agent] result.report:', JSON.stringify(result.report ?? null));
+    console.log('[sleep-agent] tool_calls_used:', result.tool_calls_used);
     return Response.json(result);
   } catch (e) {
     console.error('[sleep-agent] error:', e);
