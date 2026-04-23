@@ -17,6 +17,7 @@ export async function sendWhatsApp(
   if (!from) throw new Error('Missing env var: TWILIO_WHATSAPP_NUMBER');
 
   const client = getClient();
+  console.log('[TWILIO DEBUG] from:', from, '| to:', to, '| body length:', body.length);
   const message = await client.messages.create({ from, to, body });
   return { sid: message.sid, status: message.status };
 }
