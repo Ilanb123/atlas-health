@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import type { Metadata } from 'next';
 import { supabase } from '@/lib/supabase';
 
+export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Dashboard — Atlas Health' };
 
 function minsToHm(mins: number | null | undefined) {
