@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { anthropic } from '../anthropic';
 import { RECOVERY_TOOL_DEFINITIONS, executeRecoveryTool } from './recovery-tools';
 import { RECOVERY_KNOWLEDGE } from './recovery-knowledge';
+import { logAgentInteraction, logRecommendation, type TokenUsage } from '../instrumentation';
 
 const MODEL = 'claude-sonnet-4-5-20250929';
 const MAX_ROUNDS = 5;
@@ -29,6 +30,11 @@ export interface AgentReport {
 export interface AgentResult {
   report: AgentReport;
   tool_calls_used: string[];
+}
+
+interface CoreResult {
+  result: AgentResult;
+  tokensUsed: TokenUsage;
 }
 
 const SUBMIT_REPORT_TOOL: Anthropic.Tool = {
@@ -113,9 +119,11 @@ const FALLBACK_REPORT: AgentReport = {
   action: 'Try asking again in a moment.',
 };
 
-export async function askRecoveryAgent(userId: string, question: string): Promise<AgentResult> {
+async function runRecoveryAgentCore(userId: string, question: string): Promise<CoreResult> {
   const systemPrompt = buildSystemPrompt();
   const toolCallsUsed: string[] = [];
+  let tokensInput = 0;
+  let tokensOutput = 0;
 
   const messages: Anthropic.MessageParam[] = [
     { role: 'user', content: question },
@@ -135,11 +143,14 @@ export async function askRecoveryAgent(userId: string, question: string): Promis
       messages,
     });
 
+    tokensInput += response.usage.input_tokens;
+    tokensOutput += response.usage.output_tokens;
+
     for (const block of response.content) {
       if (block.type === 'tool_use' && block.name === 'submit_report') {
         return {
-          report: block.input as AgentReport,
-          tool_calls_used: toolCallsUsed,
+          result: { report: block.input as AgentReport, tool_calls_used: toolCallsUsed },
+          tokensUsed: { input: tokensInput, output: tokensOutput, total: tokensInput + tokensOutput },
         };
       }
     }
@@ -174,11 +185,48 @@ export async function askRecoveryAgent(userId: string, question: string): Promis
     ],
   });
 
+  tokensInput += nudge.usage.input_tokens;
+  tokensOutput += nudge.usage.output_tokens;
+
   for (const block of nudge.content) {
     if (block.type === 'tool_use' && block.name === 'submit_report') {
-      return { report: block.input as AgentReport, tool_calls_used: toolCallsUsed };
+      return {
+        result: { report: block.input as AgentReport, tool_calls_used: toolCallsUsed },
+        tokensUsed: { input: tokensInput, output: tokensOutput, total: tokensInput + tokensOutput },
+      };
     }
   }
 
-  return { report: FALLBACK_REPORT, tool_calls_used: toolCallsUsed };
+  return {
+    result: { report: FALLBACK_REPORT, tool_calls_used: toolCallsUsed },
+    tokensUsed: { input: tokensInput, output: tokensOutput, total: tokensInput + tokensOutput },
+  };
+}
+
+export async function askRecoveryAgent(userId: string, question: string): Promise<AgentResult> {
+  const startMs = Date.now();
+  const snapshotAt = new Date().toISOString();
+
+  const { result, tokensUsed } = await runRecoveryAgentCore(userId, question);
+  const latencyMs = Date.now() - startMs;
+
+  logAgentInteraction({
+    userId,
+    agentType: 'recovery',
+    userQuestion: question,
+    toolsCalled: result.tool_calls_used,
+    responseReport: result.report as unknown as Record<string, unknown>,
+    latencyMs,
+    tokensUsed,
+  }).catch(e => console.error('[instrumentation] agent_interaction:', e));
+
+  logRecommendation({
+    userId,
+    sourceAgent: 'recovery',
+    recommendationText: result.report.action,
+    dataSnapshot: result.report as unknown as Record<string, unknown>,
+    dataSnapshotAt: snapshotAt,
+  }).catch(e => console.error('[instrumentation] recommendation:', e));
+
+  return result;
 }
