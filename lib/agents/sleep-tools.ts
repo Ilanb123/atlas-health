@@ -73,6 +73,20 @@ export const SLEEP_TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
+    name: 'get_recent_checkins',
+    description: "Fetch the user's recent daily subjective check-ins (energy, mood, stress, cognitive clarity, digestion, symptoms, notable events). Use this to understand how the user is feeling and to correlate subjective state with biometric data.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        days: {
+          type: 'number',
+          description: 'Number of recent days to retrieve (1-30)',
+        },
+      },
+      required: ['days'],
+    },
+  },
+  {
     name: 'get_recent_hrv_recovery',
     description: 'Fetch recent HRV and recovery scores to correlate with sleep quality. Returns recovery data with HRV, RHR, and SpO2.',
     input_schema: {
@@ -275,6 +289,21 @@ export async function executeTool(userId: string, toolName: string, input: ToolI
         vs_period_mean_pct: `${((recentAvg - mean) / mean * 100).toFixed(1)}%`,
         data_points: values,
       });
+    }
+
+    case 'get_recent_checkins': {
+      const days = Math.min(Math.max(Number(input.days) || 7, 1), 30);
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('daily_checkins')
+        .select('date, energy_1to10, mood_1to10, stress_1to10, cognitive_clarity_1to10, digestion, symptoms, notable_events')
+        .eq('user_id', userId)
+        .gte('date', since)
+        .order('date', { ascending: false });
+
+      if (error) return `Error fetching check-ins: ${error.message}`;
+      if (!data || data.length === 0) return 'No daily check-ins found for this period.';
+      return JSON.stringify(data);
     }
 
     case 'get_recent_hrv_recovery': {

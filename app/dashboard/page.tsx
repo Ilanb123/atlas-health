@@ -39,7 +39,9 @@ export default async function DashboardPage() {
     );
   }
 
-  const [userRes, sleepRes, recoveryRes, workoutRes] = await Promise.all([
+  const todayDate = new Date().toISOString().split('T')[0];
+
+  const [userRes, sleepRes, recoveryRes, workoutRes, checkinRes] = await Promise.all([
     supabase.from('users').select('email').eq('id', userId).single(),
     supabase
       .from('sleep')
@@ -62,12 +64,22 @@ export default async function DashboardPage() {
       .order('start_time', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from('daily_checkins')
+      .select('created_at')
+      .eq('user_id', userId)
+      .eq('date', todayDate)
+      .maybeSingle(),
   ]);
 
   const email = userRes.data?.email;
   const sleep = sleepRes.data;
   const recovery = recoveryRes.data;
   const workout = workoutRes.data;
+  const checkin = checkinRes.data;
+  const checkinTime = checkin?.created_at
+    ? new Date(checkin.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    : null;
 
   return (
     <main style={styles.page}>
@@ -82,6 +94,21 @@ export default async function DashboardPage() {
       </header>
 
       <div style={{ maxWidth: '860px', margin: '0 auto 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <a
+          href="/log"
+          style={{
+            ...styles.coachBanner,
+            background: checkinTime ? '#f0fdf4' : '#fffbeb',
+            borderColor: checkinTime ? '#bbf7d0' : '#fde68a',
+          }}
+        >
+          <span style={{ color: checkinTime ? '#15803d' : '#92400e' }}>
+            {checkinTime ? `✓ Checked in today at ${checkinTime}` : '○ Today\'s check-in: not yet logged'}
+          </span>
+          <span style={{ color: '#aaa', fontSize: '0.8rem' }}>
+            {checkinTime ? 'Update entry →' : 'Log now → 20 sec'}
+          </span>
+        </a>
         <a href="/ask" style={styles.coachBanner}>
           <span>💤 Ask your sleep coach →</span>
           <span style={{ color: '#aaa', fontSize: '0.8rem' }}>Powered by your WHOOP data</span>

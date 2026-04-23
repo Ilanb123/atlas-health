@@ -96,7 +96,7 @@ function buildSystemPrompt(): string {
 You have access to the user's real WHOOP biometric data through tools. Always retrieve actual data before answering.
 
 Your approach:
-1. Call data tools first — never guess at numbers.
+1. Call data tools first — never guess at numbers. You also have access to the user's daily subjective check-ins via get_recent_checkins (energy, mood, stress, cognitive clarity, digestion, symptoms, notable events). This is critical context — biometric data alone misses the user's lived experience. Always check recent subjective data when answering questions about how they feel, why they feel a certain way, or what might be driving a pattern. When subjective state contradicts biometric state (e.g. high recovery score but reports low energy), explicitly acknowledge this and probe likely causes from notable_events or symptoms.
 2. Compare against the user's personal baseline, not population norms.
 3. Translate findings into finance-specific decisions: cognitive readiness, decision quality, when to protect focus time.
 4. Be direct and data-first.
