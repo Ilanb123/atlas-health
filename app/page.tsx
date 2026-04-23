@@ -2,6 +2,14 @@
 
 import { useState } from 'react';
 
+function WhoopIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" />
+    </svg>
+  );
+}
+
 export default function Home() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -68,6 +76,32 @@ export default function Home() {
           Sleep, recovery, and performance, simplified.
         </p>
 
+        <a
+          href="/api/whoop/authorize"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: '#000',
+            color: '#fff',
+            padding: '13px 24px',
+            borderRadius: '8px',
+            fontWeight: 600,
+            fontSize: '0.95rem',
+            textDecoration: 'none',
+            marginBottom: '32px',
+          }}
+        >
+          <WhoopIcon />
+          Connect WHOOP
+        </a>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+          <div style={{ flex: 1, height: '1px', background: '#e5e5e5' }} />
+          <span style={{ color: '#bbb', fontSize: '0.8rem' }}>or join the waitlist</span>
+          <div style={{ flex: 1, height: '1px', background: '#e5e5e5' }} />
+        </div>
+
         {submitted ? (
           <div
             style={{
@@ -123,7 +157,7 @@ export default function Home() {
           </form>
         )}
 
-        <p style={{ marginTop: '48px', fontSize: '0.8rem', color: '#aaa' }}>
+        <p style={{ marginTop: '32px', fontSize: '0.8rem', color: '#aaa' }}>
           Connects with WHOOP, Oura, and Apple Health &nbsp;&middot;&nbsp;{' '}
           <a href="/privacy" style={{ color: '#aaa', textDecoration: 'underline' }}>
             Privacy Policy
