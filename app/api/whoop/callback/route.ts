@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { backfillWhoopData } from '@/lib/whoop-sync';
@@ -72,14 +73,15 @@ export async function GET(request: NextRequest) {
     return new Response('Failed to store tokens', { status: 500 });
   }
 
-  // Fire backfill — do not await; errors are non-fatal
-  void (async () => {
+  // Schedule backfill to run after the redirect response is sent.
+  // after() is guaranteed to complete on Vercel; void pattern gets killed immediately.
+  after(async () => {
     try {
       await backfillWhoopData(user.id);
     } catch (e) {
       console.error('[backfill]', e);
     }
-  })();
+  });
 
   const THIRTY_DAYS = 30 * 24 * 60 * 60;
   const SEC = 'HttpOnly; Secure; SameSite=Lax; Path=/';
