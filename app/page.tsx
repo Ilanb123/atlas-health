@@ -1,65 +1,135 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
 
 export default function Home() {
+  const [email, setEmail] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (email) setSubmitted(true);
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main
+      style={{
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f9f9f8',
+        padding: '24px',
+      }}
+    >
+      <div style={{ maxWidth: '480px', width: '100%', textAlign: 'center' }}>
+        <div
+          style={{
+            display: 'inline-block',
+            background: '#111',
+            color: '#fff',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            padding: '4px 10px',
+            borderRadius: '4px',
+            marginBottom: '24px',
+          }}
+        >
+          Alpha
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        <h1
+          style={{
+            fontSize: '2.75rem',
+            fontWeight: 700,
+            letterSpacing: '-0.04em',
+            color: '#0d0d0d',
+            margin: '0 0 16px',
+            lineHeight: 1.1,
+          }}
+        >
+          Atlas Health
+        </h1>
+
+        <p
+          style={{
+            fontSize: '1.1rem',
+            color: '#555',
+            lineHeight: 1.6,
+            margin: '0 0 40px',
+          }}
+        >
+          Your AI health agent — built for the demands of finance.
+          <br />
+          Sleep, recovery, and performance, simplified.
+        </p>
+
+        {submitted ? (
+          <div
+            style={{
+              background: '#edfaf3',
+              border: '1px solid #a3e4c1',
+              borderRadius: '10px',
+              padding: '20px 24px',
+              color: '#1a6640',
+              fontWeight: 500,
+            }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            You&rsquo;re on the list. We&rsquo;ll be in touch soon.
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSubmit}
+            style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}
+          >
+            <input
+              type="email"
+              required
+              placeholder="your@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={{
+                flex: 1,
+                minWidth: '200px',
+                padding: '12px 16px',
+                fontSize: '1rem',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                outline: 'none',
+                background: '#fff',
+                color: '#111',
+              }}
             />
-            Deploy Now
+            <button
+              type="submit"
+              style={{
+                padding: '12px 24px',
+                fontSize: '1rem',
+                fontWeight: 600,
+                background: '#111',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Get early access
+            </button>
+          </form>
+        )}
+
+        <p style={{ marginTop: '48px', fontSize: '0.8rem', color: '#aaa' }}>
+          Connects with WHOOP, Oura, and Apple Health &nbsp;&middot;&nbsp;{' '}
+          <a href="/privacy" style={{ color: '#aaa', textDecoration: 'underline' }}>
+            Privacy Policy
           </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+        </p>
+      </div>
+    </main>
   );
 }
