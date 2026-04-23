@@ -81,10 +81,14 @@ export default async function DashboardPage() {
         </a>
       </header>
 
-      <div style={{ maxWidth: '860px', margin: '0 auto 20px' }}>
+      <div style={{ maxWidth: '860px', margin: '0 auto 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <a href="/ask" style={styles.coachBanner}>
           <span>💤 Ask your sleep coach →</span>
           <span style={{ color: '#aaa', fontSize: '0.8rem' }}>Powered by your WHOOP data</span>
+        </a>
+        <a href="/labs" style={styles.coachBanner}>
+          <span>📄 Upload Lab Results →</span>
+          <span style={{ color: '#aaa', fontSize: '0.8rem' }}>Extract biomarkers from any lab PDF</span>
         </a>
       </div>
 
