@@ -153,7 +153,7 @@ export const SLEEP_KNOWLEDGE: KnowledgeEntry[] = [
   },
   {
     category: 'stress_cognitive',
-    fact: "Journaling for 5 minutes before bed — writing tomorrow's task list — reduces sleep onset latency by offloading rumination to paper (Scullin et al., 2018, AJES).",
+    fact: "A 5-minute pre-bed journaling exercise (writing tomorrow's task list) reduces sleep onset latency by offloading rumination to paper (Scullin et al., 2018, AJES).",
   },
   {
     category: 'stress_cognitive',
