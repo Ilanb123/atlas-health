@@ -71,6 +71,8 @@ export async function logOutboundMessage(params: {
   tools_called: string[];
   tokens_used: number;
   latency_ms: number;
+  intent_classified?: string;
+  router_confidence?: number;
 }): Promise<void> {
   const supabase = supabaseAdmin();
   await supabase.from('whatsapp_messages').insert({
@@ -84,5 +86,7 @@ export async function logOutboundMessage(params: {
     tools_called: params.tools_called,
     tokens_used: params.tokens_used,
     latency_ms: params.latency_ms,
+    intent_classified: params.intent_classified,
+    router_confidence: params.router_confidence,
   });
 }

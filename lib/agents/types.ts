@@ -1,5 +1,12 @@
 // Shared types imported by multiple agents
 
+export interface AgentReply {
+  reply_text: string;
+  tools_called: string[];
+  tokens_used: number;
+  latency_ms: number;
+}
+
 export interface KeyMetric {
   label: string;
   value: string;

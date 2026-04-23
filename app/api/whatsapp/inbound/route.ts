@@ -1,6 +1,10 @@
 import 'server-only';
 import { after } from 'next/server';
+import { classifyIntent } from '@/lib/agents/intent-router';
 import { runCoachAgent } from '@/lib/agents/coach-agent';
+import { runNutritionAgent } from '@/lib/agents/nutrition-agent';
+import { runWorkoutAgent } from '@/lib/agents/workout-agent';
+import { runSleepRecoveryAgent } from '@/lib/agents/sleep-recovery-agent';
 import { sendWhatsApp } from '@/lib/twilio-client';
 import {
   lookupUserByWhatsAppNumber,
@@ -8,18 +12,18 @@ import {
   logInboundMessage,
   logOutboundMessage,
 } from '@/lib/whatsapp-conversation';
+import type { AgentReply } from '@/lib/agents/types';
 
+const CONFIDENCE_THRESHOLD = 0.7;
 const TWIML_OK = '<Response></Response>';
 
 export async function POST(request: Request) {
-  // Parse Twilio's form-encoded payload before touching after()
   const formData = await request.formData();
   const from = formData.get('From') as string;
   const to = formData.get('To') as string;
   const body = formData.get('Body') as string;
   const messageSid = formData.get('MessageSid') as string;
 
-  // Respond to Twilio immediately — must be fast
   after(async () => {
     try {
       const userId = await lookupUserByWhatsAppNumber(from);
@@ -33,22 +37,53 @@ export async function POST(request: Request) {
       await logInboundMessage({ user_id: userId, from_number: from, to_number: to, body, twilio_sid: messageSid });
 
       const history = await loadConversationHistory(userId, 10);
-      const { reply_text, tools_called, tokens_used, latency_ms } = await runCoachAgent(body, history, userId);
+      const recentHistory = history.slice(-3);
 
-      console.log('[whatsapp/inbound] coach replied in', latency_ms, 'ms, tools:', tools_called.join(','), 'tokens:', tokens_used);
+      const routerResult = await classifyIntent(body, recentHistory);
+      console.log('[whatsapp/inbound] intent:', routerResult.intent, 'confidence:', routerResult.confidence, 'reasoning:', routerResult.reasoning);
 
-      const { sid } = await sendWhatsApp(from, reply_text);
+      let agentResult: AgentReply;
+      let agentName: string;
+
+      if (routerResult.confidence >= CONFIDENCE_THRESHOLD) {
+        switch (routerResult.intent) {
+          case 'nutrition':
+            agentResult = await runNutritionAgent(body, history, userId);
+            agentName = 'nutrition';
+            break;
+          case 'workout':
+            agentResult = await runWorkoutAgent(body, history, userId);
+            agentName = 'workout';
+            break;
+          case 'sleep_recovery':
+            agentResult = await runSleepRecoveryAgent(body, history, userId);
+            agentName = 'sleep_recovery';
+            break;
+          default:
+            agentResult = await runCoachAgent(body, history, userId);
+            agentName = 'coach';
+        }
+      } else {
+        agentResult = await runCoachAgent(body, history, userId);
+        agentName = 'coach';
+      }
+
+      console.log('[whatsapp/inbound] agent:', agentName, 'latency:', agentResult.latency_ms, 'ms, tools:', agentResult.tools_called.join(','), 'tokens:', agentResult.tokens_used);
+
+      const { sid } = await sendWhatsApp(from, agentResult.reply_text);
 
       await logOutboundMessage({
         user_id: userId,
         from_number: to,
         to_number: from,
-        body: reply_text,
+        body: agentResult.reply_text,
         twilio_sid: sid,
-        agent_name: 'coach',
-        tools_called,
-        tokens_used,
-        latency_ms,
+        agent_name: agentName,
+        tools_called: agentResult.tools_called,
+        tokens_used: agentResult.tokens_used + routerResult.tokens_used,
+        latency_ms: agentResult.latency_ms + routerResult.latency_ms,
+        intent_classified: routerResult.intent,
+        router_confidence: routerResult.confidence,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
