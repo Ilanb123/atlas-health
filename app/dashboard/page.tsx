@@ -81,6 +81,13 @@ export default async function DashboardPage() {
         </a>
       </header>
 
+      <div style={{ maxWidth: '860px', margin: '0 auto 20px' }}>
+        <a href="/ask" style={styles.coachBanner}>
+          <span>💤 Ask your sleep coach →</span>
+          <span style={{ color: '#aaa', fontSize: '0.8rem' }}>Powered by your WHOOP data</span>
+        </a>
+      </div>
+
       <div style={styles.grid}>
         <Card title="Recovery">
           {recovery ? (
@@ -233,5 +240,19 @@ const styles = {
     textDecoration: 'none',
     fontWeight: 600,
     fontSize: '0.95rem',
+  } as React.CSSProperties,
+  coachBanner: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    background: '#fff',
+    border: '1px solid #e5e5e5',
+    borderRadius: '12px',
+    padding: '14px 20px',
+    textDecoration: 'none',
+    color: '#0d0d0d',
+    fontWeight: 600,
+    fontSize: '0.9rem',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
   } as React.CSSProperties,
 };
