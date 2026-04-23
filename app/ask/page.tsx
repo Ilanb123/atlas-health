@@ -34,6 +34,22 @@ const STARTER_QUESTIONS: Record<Coach, string[]> = {
   ],
 };
 
+const TOOL_LABELS: Record<string, string> = {
+  get_recent_checkins:              'Daily check-ins',
+  get_latest_sleep:                 "Last night's sleep",
+  get_sleep_history:                'Sleep history',
+  get_sleep_baseline:               'Sleep baseline',
+  compare_to_baseline:              'Baseline comparison',
+  detect_sleep_pattern:             'Sleep patterns',
+  get_recent_hrv_recovery:          'HRV & recovery',
+  get_latest_recovery:              "Today's recovery",
+  get_recovery_history:             'Recovery history',
+  get_recovery_baseline:            'Recovery baseline',
+  compare_recovery_to_baseline:     'Recovery comparison',
+  detect_recovery_trend:            'Recovery trend',
+  correlate_recovery_with_workouts: 'Recovery + workout correlation',
+};
+
 const TONE_STYLES: Record<'green' | 'yellow' | 'red', { bg: string; text: string; border: string; dot: string }> = {
   green:  { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0', dot: '#22c55e' },
   yellow: { bg: '#fffbeb', text: '#92400e', border: '#fde68a', dot: '#f59e0b' },
@@ -219,7 +235,7 @@ export default function AskPage() {
               <div style={styles.toolsFooter}>
                 <span style={{ color: '#bbb' }}>Data sources: </span>
                 {[...new Set(toolsUsed)].map((t, i) => (
-                  <span key={i} style={styles.toolTag}>{t.replace(/_/g, ' ')}</span>
+                  <span key={i} style={styles.toolTag}>{TOOL_LABELS[t] ?? t.replace(/_/g, ' ')}</span>
                 ))}
               </div>
             )}
