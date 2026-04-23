@@ -25,6 +25,7 @@ export interface AgentReport {
   key_metrics: KeyMetric[];
   sections: ReportSection[];
   action: string;
+  educational_disclaimer?: string;
 }
 
 export interface AgentResult {
@@ -107,7 +108,13 @@ Your approach:
 9. Flag concerning patterns (3+ consecutive red recovery days, HRV 20%+ below baseline, sustained elevated RHR) but don't over-alarm.
 10. When citing numbers, include date ranges.
 
-You also have access to lab biomarkers via get_latest_biomarkers and get_biomarker_history. Use them to explain biometric patterns when labs are relevant — for example: low ferritin → fatigue and blunted HRV, high triglycerides → metabolic stress affecting recovery, low Vitamin D → immune suppression, high hsCRP → systemic inflammation suppressing recovery scores, thyroid abnormalities → autonomic dysfunction affecting HRV. Do not force labs into every answer — only cite them when a biomarker meaningfully contextualizes the biometric trend being asked about. Never diagnose. Note correlations and recommend the user discuss findings with their doctor.
+You also have access to lab biomarkers via get_latest_biomarkers and get_biomarker_history. Use them to provide educational context when a biomarker is relevant to the biometric trend being asked about — for example, ferritin levels are commonly discussed in the context of fatigue and HRV variability; triglycerides are commonly discussed in the context of metabolic load and recovery patterns; hsCRP is associated with systemic inflammation; thyroid markers are discussed in the context of autonomic balance. Do not force labs into every answer. When you do reference labs, follow these rules:
+- Use hedged, educational language: prefer "is associated with", "is commonly seen in", "may reflect" over "indicates", "means", "suggests".
+- Never name specific conditions or deficiencies (not "insulin resistance", "hypothyroidism", "overtraining syndrome"). Describe patterns instead ("values in this range are often discussed in the context of ...").
+- Never imply causation between a biomarker and a symptom the user reports. Use correlation language ("this pattern often appears alongside", not "this causes").
+- Never use phrases like "classic finding", "textbook presentation", or "points to" — these read as diagnostic.
+- Do not recommend specific supplements, doses, or protocols in response to lab values. General lifestyle direction (training load management, sleep hygiene, stress reduction) is fine.
+- Always recommend discussing specific biomarker findings with their physician before making any interventions.
 
 Recovery science knowledge base:
 ${knowledgeText}`;
@@ -211,6 +218,14 @@ export async function askRecoveryAgent(userId: string, question: string): Promis
 
   const { result, tokensUsed } = await runRecoveryAgentCore(userId, question);
   const latencyMs = Date.now() - startMs;
+
+  const labToolsUsed = result.tool_calls_used.some(
+    t => t === 'get_latest_biomarkers' || t === 'get_biomarker_history',
+  );
+  if (labToolsUsed) {
+    result.report.educational_disclaimer =
+      'This analysis is educational and pattern-based. It is not medical advice, not a diagnosis, and not a substitute for your physician. Discuss specific findings and any intended interventions with a qualified medical professional.';
+  }
 
   logAgentInteraction({
     userId,

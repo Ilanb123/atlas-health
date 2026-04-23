@@ -12,6 +12,7 @@ interface AgentReport {
   key_metrics: KeyMetric[];
   sections: ReportSection[];
   action: string;
+  educational_disclaimer?: string;
 }
 
 const COACHES: { id: Coach; label: string; description: string }[] = [
@@ -231,6 +232,11 @@ export default function AskPage() {
               <div style={styles.actionLabel}>Do this next</div>
               <p style={styles.actionText}>{report.action}</p>
             </div>
+
+            {/* Educational disclaimer (labs only) */}
+            {report.educational_disclaimer && (
+              <p style={styles.disclaimer}>{report.educational_disclaimer}</p>
+            )}
 
             {/* Tools footer */}
             {toolsUsed.length > 0 && (
@@ -468,6 +474,14 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
     fontWeight: 500,
   },
+  disclaimer: {
+    fontSize: '0.75rem',
+    fontStyle: 'italic',
+    color: '#aaa',
+    lineHeight: 1.5,
+    padding: '0 4px',
+    marginBottom: '4px',
+  } as React.CSSProperties,
   toolsFooter: {
     display: 'flex',
     flexWrap: 'wrap',
