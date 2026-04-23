@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 type Coach = 'sleep' | 'recovery';
 
@@ -87,10 +88,45 @@ export default function AskPage() {
     submit(q);
   }
 
-  const paragraphs = response?.split('\n').filter(p => p.trim()) ?? [];
   const activeCoach = COACHES.find(c => c.id === coach)!;
 
   return (
+    <>
+    <style>{`
+      .md-content { color: #1a1a1a; font-size: 0.97rem; line-height: 1.75; }
+      .md-content p { margin: 0 0 14px; }
+      .md-content p:last-child { margin-bottom: 0; }
+      .md-content h1, .md-content h2, .md-content h3 {
+        font-family: Georgia, 'Times New Roman', serif;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin: 20px 0 8px;
+        color: #0d0d0d;
+      }
+      .md-content h1 { font-size: 1.3rem; }
+      .md-content h2 { font-size: 1.1rem; }
+      .md-content h3 { font-size: 1rem; }
+      .md-content strong { font-weight: 700; color: #0d0d0d; }
+      .md-content em { font-style: italic; }
+      .md-content ul, .md-content ol {
+        padding-left: 20px;
+        margin: 0 0 14px;
+      }
+      .md-content li { margin-bottom: 6px; line-height: 1.6; }
+      .md-content code {
+        background: #f5f5f4;
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: 0.88em;
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        color: #555;
+      }
+      .md-content hr {
+        border: none;
+        border-top: 1px solid #f0f0f0;
+        margin: 16px 0;
+      }
+    `}</style>
     <main style={styles.page}>
       <header style={styles.header}>
         <a href="/dashboard" style={{ textDecoration: 'none' }}>
@@ -167,9 +203,9 @@ export default function AskPage() {
 
         {response && (
           <div style={styles.responseBox}>
-            {paragraphs.map((para, i) => (
-              <p key={i} style={styles.para}>{para}</p>
-            ))}
+            <div className="md-content">
+              <ReactMarkdown>{response}</ReactMarkdown>
+            </div>
 
             {toolsUsed.length > 0 && (
               <div style={styles.toolsFooter}>
@@ -195,6 +231,7 @@ export default function AskPage() {
         )}
       </div>
     </main>
+    </>
   );
 }
 
@@ -322,12 +359,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '16px',
     padding: '28px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
-  },
-  para: {
-    color: '#1a1a1a',
-    fontSize: '0.97rem',
-    lineHeight: 1.7,
-    marginBottom: '14px',
   },
   toolsFooter: {
     marginTop: '20px',
