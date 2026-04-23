@@ -1,4 +1,6 @@
 import type { NextRequest } from 'next/server';
+import { supabase } from '@/lib/supabase';
+import { backfillWhoopData } from '@/lib/whoop-sync';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -10,6 +12,7 @@ export async function GET(request: NextRequest) {
     return new Response('Invalid OAuth state', { status: 400 });
   }
 
+  // Exchange code for tokens
   const tokenRes = await fetch('https://api.prod.whoop.com/oauth/oauth2/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -28,14 +31,67 @@ export async function GET(request: NextRequest) {
   }
 
   const { access_token, refresh_token, expires_in } = await tokenRes.json();
-  const expires_at = Date.now() + expires_in * 1000;
-  const base = 'HttpOnly; Secure; SameSite=Lax; Path=/';
+
+  // Fetch WHOOP user profile
+  const profileRes = await fetch('https://api.prod.whoop.com/developer/v2/user/profile/basic', {
+    headers: { Authorization: `Bearer ${access_token}` },
+  });
+
+  if (!profileRes.ok) {
+    return new Response('Failed to fetch WHOOP profile', { status: 502 });
+  }
+
+  const profile = await profileRes.json();
+
+  // Upsert user
+  const { data: user, error: userError } = await supabase
+    .from('users')
+    .upsert(
+      { email: profile.email, whoop_user_id: profile.user_id },
+      { onConflict: 'email' }
+    )
+    .select('id')
+    .single();
+
+  if (userError || !user) {
+    console.error('[callback] user upsert failed:', userError);
+    return new Response('Failed to create user', { status: 500 });
+  }
+
+  // Upsert tokens
+  const expiresAt = new Date(Date.now() + expires_in * 1000).toISOString();
+  const { error: tokenError } = await supabase
+    .from('whoop_tokens')
+    .upsert(
+      { user_id: user.id, access_token, refresh_token, expires_at: expiresAt },
+      { onConflict: 'user_id' }
+    );
+
+  if (tokenError) {
+    console.error('[callback] token upsert failed:', tokenError);
+    return new Response('Failed to store tokens', { status: 500 });
+  }
+
+  // Fire backfill — do not await; errors are non-fatal
+  void (async () => {
+    try {
+      await backfillWhoopData(user.id);
+    } catch (e) {
+      console.error('[backfill]', e);
+    }
+  })();
+
+  const THIRTY_DAYS = 30 * 24 * 60 * 60;
+  const SEC = 'HttpOnly; Secure; SameSite=Lax; Path=/';
+  const CLEAR = `${SEC}; Max-Age=0`;
 
   const headers = new Headers({ Location: '/dashboard' });
-  headers.append('Set-Cookie', `whoop_access_token=${access_token}; ${base}; Max-Age=${expires_in}`);
-  headers.append('Set-Cookie', `whoop_refresh_token=${refresh_token}; ${base}`);
-  headers.append('Set-Cookie', `whoop_expires_at=${expires_at}; ${base}`);
-  headers.append('Set-Cookie', `whoop_state=; ${base}; Max-Age=0`);
+  headers.append('Set-Cookie', `atlas_user_id=${user.id}; ${SEC}; Max-Age=${THIRTY_DAYS}`);
+  // Clear old token cookies
+  headers.append('Set-Cookie', `whoop_access_token=; ${CLEAR}`);
+  headers.append('Set-Cookie', `whoop_refresh_token=; ${CLEAR}`);
+  headers.append('Set-Cookie', `whoop_expires_at=; ${CLEAR}`);
+  headers.append('Set-Cookie', `whoop_state=; ${CLEAR}`);
 
   return new Response(null, { status: 302, headers });
 }

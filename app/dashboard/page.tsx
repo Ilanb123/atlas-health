@@ -1,26 +1,18 @@
 import { cookies } from 'next/headers';
 import type { Metadata } from 'next';
+import { supabase } from '@/lib/supabase';
 
 export const metadata: Metadata = { title: 'Dashboard — Atlas Health' };
 
-const WHOOP = 'https://api.prod.whoop.com/developer/v2';
-
-async function whoopFetch(path: string, token: string) {
-  const res = await fetch(`${WHOOP}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store',
-  });
-  if (!res.ok) return null;
-  return res.json();
-}
-
-function ms(millis: number) {
-  const h = Math.floor(millis / 3_600_000);
-  const m = Math.floor((millis % 3_600_000) / 60_000);
+function minsToHm(mins: number | null | undefined) {
+  if (mins == null) return '—';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-function recoveryColor(score: number) {
+function recoveryColor(score: number | null | undefined) {
+  if (score == null) return '#888';
   if (score >= 67) return '#22c55e';
   if (score >= 34) return '#f59e0b';
   return '#ef4444';
@@ -28,9 +20,9 @@ function recoveryColor(score: number) {
 
 export default async function DashboardPage() {
   const cookieStore = await cookies();
-  const token = cookieStore.get('whoop_access_token')?.value;
+  const userId = cookieStore.get('atlas_user_id')?.value;
 
-  if (!token) {
+  if (!userId) {
     return (
       <main style={styles.page}>
         <div style={{ textAlign: 'center' }}>
@@ -46,128 +38,102 @@ export default async function DashboardPage() {
     );
   }
 
-  const [profile, sleepData, recoveryData, workoutData] = await Promise.all([
-    whoopFetch('/user/profile/basic', token),
-    whoopFetch('/activity/sleep?limit=1', token),
-    whoopFetch('/recovery?limit=1', token),
-    whoopFetch('/activity/workout?limit=1', token),
+  const [userRes, sleepRes, recoveryRes, workoutRes] = await Promise.all([
+    supabase.from('users').select('email').eq('id', userId).single(),
+    supabase
+      .from('sleep')
+      .select('sleep_performance_pct, time_in_bed_minutes, rem_minutes, deep_minutes, efficiency_pct')
+      .eq('user_id', userId)
+      .order('start_time', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('recovery')
+      .select('recovery_score, hrv_ms, rhr_bpm, spo2_pct')
+      .eq('user_id', userId)
+      .order('recovery_date', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('workouts')
+      .select('strain, avg_hr, max_hr, calories, duration_minutes')
+      .eq('user_id', userId)
+      .order('start_time', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
-  const sleep = sleepData?.records?.[0];
-  const recovery = recoveryData?.records?.[0];
-  const workout = workoutData?.records?.[0];
+  const email = userRes.data?.email;
+  const sleep = sleepRes.data;
+  const recovery = recoveryRes.data;
+  const workout = workoutRes.data;
 
   return (
     <main style={styles.page}>
       <header style={styles.header}>
-        <div>
-          <span style={styles.logo}>Atlas Health</span>
-          {profile && (
-            <span style={{ color: '#888', fontSize: '0.9rem', marginLeft: '12px' }}>
-              {profile.first_name} {profile.last_name}
-            </span>
-          )}
-        </div>
-        <a href="/" style={{ color: '#aaa', fontSize: '0.85rem', textDecoration: 'none' }}>
+        <span style={styles.logo}>Atlas Health</span>
+        {email && (
+          <span style={{ color: '#888', fontSize: '0.85rem' }}>{email}</span>
+        )}
+        <a href="/" style={{ color: '#aaa', fontSize: '0.85rem', textDecoration: 'none', marginLeft: 'auto' }}>
           ← Home
         </a>
       </header>
 
       <div style={styles.grid}>
-        {/* Recovery */}
         <Card title="Recovery">
-          {recovery?.score ? (
+          {recovery ? (
             <>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '16px' }}>
-                <span
-                  style={{
-                    fontSize: '3.5rem',
-                    fontWeight: 700,
-                    lineHeight: 1,
-                    color: recoveryColor(recovery.score.recovery_score),
-                  }}
-                >
-                  {Math.round(recovery.score.recovery_score)}
-                </span>
-                <span style={{ color: '#888', fontSize: '1rem' }}>/ 100</span>
-              </div>
-              <Stat label="HRV" value={`${Math.round(recovery.score.hrv_rmssd_milli)} ms`} />
-              <Stat label="Resting HR" value={`${Math.round(recovery.score.resting_heart_rate)} bpm`} />
-              {recovery.score.spo2_percentage && (
-                <Stat label="SpO₂" value={`${recovery.score.spo2_percentage.toFixed(1)}%`} />
-              )}
+              <BigStat
+                value={recovery.recovery_score != null ? String(Math.round(recovery.recovery_score)) : '—'}
+                unit="/ 100"
+                color={recoveryColor(recovery.recovery_score)}
+              />
+              <Stat label="HRV" value={recovery.hrv_ms != null ? `${Math.round(recovery.hrv_ms)} ms` : '—'} />
+              <Stat label="Resting HR" value={recovery.rhr_bpm != null ? `${recovery.rhr_bpm} bpm` : '—'} />
+              <Stat label="SpO₂" value={recovery.spo2_pct != null ? `${Number(recovery.spo2_pct).toFixed(1)}%` : '—'} />
             </>
           ) : (
-            <Empty />
+            <Syncing />
           )}
         </Card>
 
-        {/* Sleep */}
         <Card title="Last Night's Sleep">
-          {sleep?.score ? (
+          {sleep ? (
             <>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '16px' }}>
-                <span style={{ fontSize: '3.5rem', fontWeight: 700, lineHeight: 1, color: '#6366f1' }}>
-                  {Math.round(sleep.score.sleep_performance_percentage)}
-                </span>
-                <span style={{ color: '#888', fontSize: '1rem' }}>%</span>
-              </div>
-              <Stat
-                label="Time in Bed"
-                value={ms(sleep.score.stage_summary.total_in_bed_time_milli)}
+              <BigStat
+                value={sleep.sleep_performance_pct != null ? String(Math.round(Number(sleep.sleep_performance_pct))) : '—'}
+                unit="%"
+                color="#6366f1"
               />
-              <Stat
-                label="REM"
-                value={ms(sleep.score.stage_summary.total_rem_sleep_time_milli)}
-              />
-              <Stat
-                label="Deep (SWS)"
-                value={ms(sleep.score.stage_summary.total_slow_wave_sleep_time_milli)}
-              />
-              <Stat
-                label="Efficiency"
-                value={`${sleep.score.sleep_efficiency_percentage.toFixed(1)}%`}
-              />
+              <Stat label="Time in Bed" value={minsToHm(sleep.time_in_bed_minutes)} />
+              <Stat label="REM" value={minsToHm(sleep.rem_minutes)} />
+              <Stat label="Deep (SWS)" value={minsToHm(sleep.deep_minutes)} />
+              <Stat label="Efficiency" value={sleep.efficiency_pct != null ? `${Number(sleep.efficiency_pct).toFixed(1)}%` : '—'} />
             </>
           ) : (
-            <Empty />
+            <Syncing />
           )}
         </Card>
 
-        {/* Workout */}
         <Card title="Latest Workout">
-          {workout?.score ? (
+          {workout ? (
             <>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '16px' }}>
-                <span style={{ fontSize: '3.5rem', fontWeight: 700, lineHeight: 1, color: '#f97316' }}>
-                  {workout.score.strain.toFixed(1)}
-                </span>
-                <span style={{ color: '#888', fontSize: '1rem' }}>strain</span>
-              </div>
-              <Stat label="Avg HR" value={`${Math.round(workout.score.average_heart_rate)} bpm`} />
-              <Stat label="Max HR" value={`${Math.round(workout.score.max_heart_rate)} bpm`} />
-              <Stat
-                label="Calories"
-                value={`${Math.round(workout.score.kilojoule * 0.239)} kcal`}
+              <BigStat
+                value={workout.strain != null ? Number(workout.strain).toFixed(1) : '—'}
+                unit="strain"
+                color="#f97316"
               />
-              {workout.start && workout.end && (
-                <Stat
-                  label="Duration"
-                  value={ms(new Date(workout.end).getTime() - new Date(workout.start).getTime())}
-                />
-              )}
+              <Stat label="Duration" value={minsToHm(workout.duration_minutes)} />
+              <Stat label="Avg HR" value={workout.avg_hr != null ? `${workout.avg_hr} bpm` : '—'} />
+              <Stat label="Max HR" value={workout.max_hr != null ? `${workout.max_hr} bpm` : '—'} />
+              <Stat label="Calories" value={workout.calories != null ? `${workout.calories} kcal` : '—'} />
             </>
           ) : (
-            <Empty />
+            <Syncing />
           )}
         </Card>
       </div>
-
-      {profile?.email && (
-        <p style={{ textAlign: 'center', color: '#bbb', fontSize: '0.8rem', marginTop: '40px' }}>
-          {profile.email}
-        </p>
-      )}
     </main>
   );
 }
@@ -177,6 +143,15 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
     <div style={styles.card}>
       <h2 style={styles.cardTitle}>{title}</h2>
       {children}
+    </div>
+  );
+}
+
+function BigStat({ value, unit, color }: { value: string; unit: string; color: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '16px' }}>
+      <span style={{ fontSize: '3.5rem', fontWeight: 700, lineHeight: 1, color }}>{value}</span>
+      <span style={{ color: '#888', fontSize: '1rem' }}>{unit}</span>
     </div>
   );
 }
@@ -192,8 +167,12 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Empty() {
-  return <p style={{ color: '#aaa', fontSize: '0.9rem' }}>No data available</p>;
+function Syncing() {
+  return (
+    <p style={{ color: '#aaa', fontSize: '0.9rem', fontStyle: 'italic' }}>
+      Syncing… refresh in a moment
+    </p>
+  );
 }
 
 const styles = {
@@ -206,7 +185,7 @@ const styles = {
   header: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: '12px',
     maxWidth: '860px',
     margin: '0 auto 32px',
   } as React.CSSProperties,
