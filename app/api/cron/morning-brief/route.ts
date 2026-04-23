@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateMorningBrief } from '@/lib/agents/morning-brief-agent';
 import { sendWhatsApp } from '@/lib/twilio-client';
+import { logOutboundMessage } from '@/lib/whatsapp-conversation';
 
 const DEEP_LINK = 'https://atlas-health-psi.vercel.app/today';
 
@@ -74,6 +75,18 @@ export async function GET(request: Request) {
       .from('morning_briefs')
       .update({ sent_at: new Date().toISOString(), whatsapp_sid: sid })
       .eq('id', row.id);
+
+    await logOutboundMessage({
+      user_id: userId,
+      from_number: process.env.TWILIO_WHATSAPP_NUMBER!,
+      to_number: `whatsapp:${whatsappTo}`,
+      body: whatsappText,
+      twilio_sid: sid,
+      agent_name: 'morning-brief',
+      tools_called: toolsCalled,
+      tokens_used: tokensUsed.total,
+      latency_ms: latencyMs,
+    }).catch(e => console.error('[morning-brief] logOutboundMessage failed:', e));
 
     return NextResponse.json({ success: true, brief_id: row.id, whatsapp_sid: sid, whatsapp_status: status });
   } catch (err) {
