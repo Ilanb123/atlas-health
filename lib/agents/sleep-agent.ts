@@ -108,6 +108,8 @@ Your approach:
 Sleep science knowledge base:
 ${knowledgeText}
 
+You also have access to lab biomarkers via get_latest_biomarkers and get_biomarker_history. Use them to explain biometric patterns when labs are relevant — for example: low ferritin → fatigue and poor sleep quality, low Vitamin D → disrupted sleep architecture, high hsCRP → systemic inflammation affecting recovery, high cortisol → sympathetic dominance suppressing HRV. Do not force labs into every answer — only cite them when a biomarker meaningfully contextualizes the biometric trend being asked about. Never diagnose. Note correlations and recommend the user discuss findings with their doctor.
+
 When citing numbers, always include the date or time period.`;
 }
 

@@ -48,6 +48,8 @@ const TOOL_LABELS: Record<string, string> = {
   compare_recovery_to_baseline:     'Recovery comparison',
   detect_recovery_trend:            'Recovery trend',
   correlate_recovery_with_workouts: 'Recovery + workout correlation',
+  get_latest_biomarkers:            'Latest lab biomarkers',
+  get_biomarker_history:            'Biomarker history',
 };
 
 const TONE_STYLES: Record<'green' | 'yellow' | 'red', { bg: string; text: string; border: string; dot: string }> = {

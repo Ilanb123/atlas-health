@@ -1,5 +1,6 @@
 import 'server-only';
 import { supabase } from '../supabase';
+import { BIOMARKER_TOOL_DEFINITIONS, executeBiomarkerTool } from './biomarker-tools';
 
 export interface ToolDefinition {
   name: string;
@@ -12,6 +13,7 @@ export interface ToolDefinition {
 }
 
 export const SLEEP_TOOL_DEFINITIONS: ToolDefinition[] = [
+  ...BIOMARKER_TOOL_DEFINITIONS,
   {
     name: 'get_latest_sleep',
     description: 'Fetch the most recent sleep record for the user, including sleep performance, time in bed, REM, deep sleep, efficiency, and respiratory rate.',
@@ -105,6 +107,10 @@ export const SLEEP_TOOL_DEFINITIONS: ToolDefinition[] = [
 type ToolInput = Record<string, unknown>;
 
 export async function executeTool(userId: string, toolName: string, input: ToolInput): Promise<string> {
+  if (toolName === 'get_latest_biomarkers' || toolName === 'get_biomarker_history') {
+    return executeBiomarkerTool(userId, toolName, input);
+  }
+
   switch (toolName) {
     case 'get_latest_sleep': {
       const { data, error } = await supabase

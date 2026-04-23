@@ -1,5 +1,6 @@
 import 'server-only';
 import { supabase } from '../supabase';
+import { BIOMARKER_TOOL_DEFINITIONS, executeBiomarkerTool } from './biomarker-tools';
 
 export interface ToolDefinition {
   name: string;
@@ -12,6 +13,7 @@ export interface ToolDefinition {
 }
 
 export const RECOVERY_TOOL_DEFINITIONS: ToolDefinition[] = [
+  ...BIOMARKER_TOOL_DEFINITIONS,
   {
     name: 'get_latest_recovery',
     description: 'Fetch the most recent recovery record for the user, including recovery score, HRV, resting heart rate, SpO2, and skin temperature.',
@@ -128,6 +130,10 @@ function confidence(r2: number): 'high' | 'medium' | 'low' {
 }
 
 export async function executeRecoveryTool(userId: string, toolName: string, input: ToolInput): Promise<string> {
+  if (toolName === 'get_latest_biomarkers' || toolName === 'get_biomarker_history') {
+    return executeBiomarkerTool(userId, toolName, input);
+  }
+
   switch (toolName) {
     case 'get_latest_recovery': {
       try {
