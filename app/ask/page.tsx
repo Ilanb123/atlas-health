@@ -13,7 +13,16 @@ interface AgentReport {
   sections: ReportSection[];
   action: string;
   educational_disclaimer?: string;
+  recommendation_id?: string;
 }
+
+type FeedbackOption = { value: string; label: string };
+const FEEDBACK_OPTIONS: FeedbackOption[] = [
+  { value: 'helpful',      label: 'Helpful' },
+  { value: 'will_try',     label: 'Will try this' },
+  { value: 'not_helpful',  label: 'Not helpful' },
+  { value: 'not_relevant', label: 'Not relevant' },
+];
 
 const COACHES: { id: Coach; label: string; description: string }[] = [
   { id: 'sleep', label: 'Sleep Coach', description: 'Sleep stages, REM, deep sleep, efficiency' },
@@ -66,6 +75,8 @@ export default function AskPage() {
   const [toolsUsed, setToolsUsed] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [feedbackGiven, setFeedbackGiven] = useState<string | null>(null);
+  const [feedbackDone, setFeedbackDone] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   function switchCoach(next: Coach) {
@@ -75,6 +86,8 @@ export default function AskPage() {
     setToolsUsed([]);
     setError(null);
     setQuestion('');
+    setFeedbackGiven(null);
+    setFeedbackDone(false);
   }
 
   async function submit(q: string) {
@@ -85,6 +98,8 @@ export default function AskPage() {
     setError(null);
     setReport(null);
     setToolsUsed([]);
+    setFeedbackGiven(null);
+    setFeedbackDone(false);
 
     try {
       const res = await fetch(`/api/ask/${coach}`, {
@@ -110,6 +125,20 @@ export default function AskPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function submitFeedback(recommendationId: string, value: string) {
+    setFeedbackGiven(value);
+    try {
+      await fetch(`/api/recommendations/${recommendationId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response: value }),
+      });
+    } catch {
+      // fire-and-forget; don't surface errors to the user
+    }
+    setFeedbackDone(true);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -232,6 +261,36 @@ export default function AskPage() {
               <div style={styles.actionLabel}>Do this next</div>
               <p style={styles.actionText}>{report.action}</p>
             </div>
+
+            {/* Feedback row */}
+            {report.recommendation_id && (
+              <div style={styles.feedbackWrap}>
+                {feedbackDone ? (
+                  <p style={styles.feedbackConfirm}>
+                    ✓ {FEEDBACK_OPTIONS.find(o => o.value === feedbackGiven)?.label} — logged.
+                  </p>
+                ) : (
+                  <>
+                    <span style={styles.feedbackCaption}>Was this useful?</span>
+                    <div style={styles.feedbackRow}>
+                      {FEEDBACK_OPTIONS.map(opt => (
+                        <button
+                          key={opt.value}
+                          disabled={feedbackGiven !== null}
+                          style={{
+                            ...styles.feedbackBtn,
+                            ...(feedbackGiven === opt.value ? styles.feedbackBtnActive : {}),
+                          }}
+                          onClick={() => submitFeedback(report.recommendation_id!, opt.value)}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Educational disclaimer (labs only) */}
             {report.educational_disclaimer && (
@@ -481,6 +540,43 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.5,
     padding: '0 4px',
     marginBottom: '4px',
+  } as React.CSSProperties,
+  feedbackWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  } as React.CSSProperties,
+  feedbackCaption: {
+    fontSize: '0.75rem',
+    color: '#aaa',
+    fontWeight: 500,
+  } as React.CSSProperties,
+  feedbackRow: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+  } as React.CSSProperties,
+  feedbackBtn: {
+    padding: '5px 14px',
+    borderRadius: '100px',
+    border: '1.5px solid #e5e5e5',
+    background: '#fff',
+    color: '#555',
+    fontSize: '0.78rem',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  } as React.CSSProperties,
+  feedbackBtnActive: {
+    background: '#111',
+    color: '#fff',
+    border: '1.5px solid #111',
+  } as React.CSSProperties,
+  feedbackConfirm: {
+    fontSize: '0.78rem',
+    color: '#888',
+    fontStyle: 'italic',
+    margin: 0,
   } as React.CSSProperties,
   toolsFooter: {
     display: 'flex',

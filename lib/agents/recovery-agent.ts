@@ -26,6 +26,7 @@ export interface AgentReport {
   sections: ReportSection[];
   action: string;
   educational_disclaimer?: string;
+  recommendation_id?: string;
 }
 
 export interface AgentResult {
@@ -237,13 +238,15 @@ export async function askRecoveryAgent(userId: string, question: string): Promis
     tokensUsed,
   }).catch(e => console.error('[instrumentation] agent_interaction:', e));
 
-  logRecommendation({
+  const recommendationId = await logRecommendation({
     userId,
     sourceAgent: 'recovery',
     recommendationText: result.report.action,
     dataSnapshot: result.report as unknown as Record<string, unknown>,
     dataSnapshotAt: snapshotAt,
-  }).catch(e => console.error('[instrumentation] recommendation:', e));
+  }).catch(e => { console.error('[instrumentation] recommendation:', e); return null; });
+
+  if (recommendationId) result.report.recommendation_id = recommendationId;
 
   return result;
 }

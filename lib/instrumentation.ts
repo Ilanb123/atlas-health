@@ -38,14 +38,19 @@ export async function logAgentInteraction(params: LogAgentInteractionParams): Pr
   if (error) throw new Error(`agent_interactions insert: ${error.message}`);
 }
 
-export async function logRecommendation(params: LogRecommendationParams): Promise<void> {
-  const { error } = await supabase.from('recommendations').insert({
-    user_id: params.userId,
-    source_agent: params.sourceAgent,
-    recommendation_type: `${params.sourceAgent}_action`,
-    recommendation_text: params.recommendationText,
-    based_on_data_snapshot: params.dataSnapshot,
-    data_snapshot_at: params.dataSnapshotAt,
-  });
+export async function logRecommendation(params: LogRecommendationParams): Promise<string> {
+  const { data, error } = await supabase
+    .from('recommendations')
+    .insert({
+      user_id: params.userId,
+      source_agent: params.sourceAgent,
+      recommendation_type: `${params.sourceAgent}_action`,
+      recommendation_text: params.recommendationText,
+      based_on_data_snapshot: params.dataSnapshot,
+      data_snapshot_at: params.dataSnapshotAt,
+    })
+    .select('id')
+    .single();
   if (error) throw new Error(`recommendations insert: ${error.message}`);
+  return data.id as string;
 }
