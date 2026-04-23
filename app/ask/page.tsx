@@ -2,20 +2,45 @@
 
 import { useState, useRef } from 'react';
 
-const STARTER_QUESTIONS = [
-  'How was my sleep last night?',
-  'Am I getting enough REM sleep?',
-  'How does my HRV today affect my focus for the trading day?',
-  'What patterns do you see in my sleep over the last 2 weeks?',
+type Coach = 'sleep' | 'recovery';
+
+const COACHES: { id: Coach; label: string; description: string }[] = [
+  { id: 'sleep', label: 'Sleep Coach', description: 'Sleep stages, REM, deep sleep, efficiency' },
+  { id: 'recovery', label: 'Recovery Coach', description: 'HRV, autonomic balance, overtraining, readiness' },
 ];
 
+const STARTER_QUESTIONS: Record<Coach, string[]> = {
+  sleep: [
+    'How was my sleep last night?',
+    'Am I getting enough REM sleep?',
+    'How does my HRV today affect my focus for the trading day?',
+    'What patterns do you see in my sleep over the last 2 weeks?',
+  ],
+  recovery: [
+    'Is my HRV trending up or down?',
+    'How recovered am I today?',
+    'Am I overtraining?',
+    'Should I push hard or pull back today?',
+  ],
+};
+
 export default function AskPage() {
+  const [coach, setCoach] = useState<Coach>('sleep');
   const [question, setQuestion] = useState('');
   const [response, setResponse] = useState<string | null>(null);
   const [toolsUsed, setToolsUsed] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function switchCoach(next: Coach) {
+    if (next === coach) return;
+    setCoach(next);
+    setResponse(null);
+    setToolsUsed([]);
+    setError(null);
+    setQuestion('');
+  }
 
   async function submit(q: string) {
     const trimmed = q.trim();
@@ -27,7 +52,7 @@ export default function AskPage() {
     setToolsUsed([]);
 
     try {
-      const res = await fetch('/api/ask/sleep', {
+      const res = await fetch(`/api/ask/${coach}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: trimmed }),
@@ -63,6 +88,7 @@ export default function AskPage() {
   }
 
   const paragraphs = response?.split('\n').filter(p => p.trim()) ?? [];
+  const activeCoach = COACHES.find(c => c.id === coach)!;
 
   return (
     <main style={styles.page}>
@@ -70,21 +96,33 @@ export default function AskPage() {
         <a href="/dashboard" style={{ textDecoration: 'none' }}>
           <span style={styles.logo}>Atlas Health</span>
         </a>
-        <span style={{ color: '#888', fontSize: '0.85rem' }}>Sleep Coach</span>
         <a href="/dashboard" style={{ color: '#aaa', fontSize: '0.85rem', textDecoration: 'none', marginLeft: 'auto' }}>
           ← Dashboard
         </a>
       </header>
 
       <div style={styles.container}>
-        <h1 style={styles.heading}>Ask your sleep coach</h1>
-        <p style={styles.subheading}>
-          Powered by your real WHOOP data. Ask anything about your sleep, recovery, or performance.
-        </p>
+        {/* Coach selector */}
+        <div style={styles.tabRow}>
+          {COACHES.map(c => (
+            <button
+              key={c.id}
+              onClick={() => switchCoach(c.id)}
+              style={{
+                ...styles.tab,
+                ...(coach === c.id ? styles.tabActive : styles.tabInactive),
+              }}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        <p style={styles.subheading}>{activeCoach.description}</p>
 
         {!response && !loading && (
           <div style={styles.starters}>
-            {STARTER_QUESTIONS.map(q => (
+            {STARTER_QUESTIONS[coach].map(q => (
               <button key={q} style={styles.starterBtn} onClick={() => useStarter(q)}>
                 {q}
               </button>
@@ -98,7 +136,7 @@ export default function AskPage() {
             value={question}
             onChange={e => setQuestion(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about your sleep, HRV, recovery…"
+            placeholder={coach === 'sleep' ? 'Ask about your sleep, stages, efficiency…' : 'Ask about your HRV, recovery, readiness…'}
             rows={3}
             style={styles.textarea}
             disabled={loading}
@@ -124,9 +162,7 @@ export default function AskPage() {
         )}
 
         {error && (
-          <div style={styles.errorBox}>
-            {error}
-          </div>
+          <div style={styles.errorBox}>{error}</div>
         )}
 
         {response && (
@@ -137,7 +173,7 @@ export default function AskPage() {
 
             {toolsUsed.length > 0 && (
               <div style={styles.toolsFooter}>
-                <span style={{ color: '#bbb' }}>Data sources used: </span>
+                <span style={{ color: '#bbb' }}>Data sources: </span>
                 {toolsUsed.map((t, i) => (
                   <span key={i} style={styles.toolTag}>{t.replace(/_/g, ' ')}</span>
                 ))}
@@ -186,18 +222,34 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '680px',
     margin: '0 auto',
   },
-  heading: {
-    fontSize: '1.75rem',
-    fontWeight: 700,
-    letterSpacing: '-0.03em',
-    color: '#0d0d0d',
-    marginBottom: '8px',
+  tabRow: {
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '16px',
+  },
+  tab: {
+    padding: '9px 20px',
+    borderRadius: '20px',
+    border: 'none',
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+    transition: 'background 0.15s, color 0.15s',
+  },
+  tabActive: {
+    background: '#111',
+    color: '#fff',
+  },
+  tabInactive: {
+    background: '#fff',
+    color: '#666',
+    border: '1px solid #e5e5e5',
   },
   subheading: {
-    color: '#666',
-    fontSize: '0.95rem',
-    marginBottom: '32px',
-    lineHeight: 1.5,
+    color: '#888',
+    fontSize: '0.88rem',
+    marginBottom: '24px',
   },
   starters: {
     display: 'flex',
@@ -214,7 +266,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#444',
     cursor: 'pointer',
     fontFamily: 'inherit',
-    transition: 'border-color 0.15s',
   },
   inputRow: {
     display: 'flex',
@@ -257,7 +308,6 @@ const styles: Record<string, React.CSSProperties> = {
     height: '8px',
     borderRadius: '50%',
     background: '#6366f1',
-    animation: 'pulse 1.2s infinite',
   },
   errorBox: {
     background: '#fef2f2',
