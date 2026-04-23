@@ -41,7 +41,7 @@ export default async function DashboardPage() {
 
   const todayDate = new Date().toISOString().split('T')[0];
 
-  const [userRes, sleepRes, recoveryRes, workoutRes, checkinRes] = await Promise.all([
+  const [userRes, sleepRes, recoveryRes, workoutRes, checkinRes, briefRes] = await Promise.all([
     supabase.from('users').select('email').eq('id', userId).single(),
     supabase
       .from('sleep')
@@ -70,6 +70,12 @@ export default async function DashboardPage() {
       .eq('user_id', userId)
       .eq('date', todayDate)
       .maybeSingle(),
+    supabase
+      .from('morning_briefs')
+      .select('headline, verdict_tone')
+      .eq('user_id', userId)
+      .eq('brief_date', todayDate)
+      .maybeSingle(),
   ]);
 
   const email = userRes.data?.email;
@@ -77,6 +83,7 @@ export default async function DashboardPage() {
   const recovery = recoveryRes.data;
   const workout = workoutRes.data;
   const checkin = checkinRes.data;
+  const brief = briefRes.data;
   const checkinTime = checkin?.created_at
     ? new Date(checkin.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
     : null;
@@ -94,6 +101,23 @@ export default async function DashboardPage() {
       </header>
 
       <div style={{ maxWidth: '860px', margin: '0 auto 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <a
+          href="/today"
+          style={{
+            ...styles.coachBanner,
+            background: brief ? '#f0f9ff' : '#fafafa',
+            borderColor: brief ? '#bae6fd' : '#e5e5e5',
+          }}
+        >
+          <span style={{ color: brief ? '#0369a1' : '#888' }}>
+            {brief
+              ? `☀️ Today's Brief: ${brief.headline}`
+              : '☀️ Morning brief — arriving at 6:30 AM'}
+          </span>
+          <span style={{ color: '#aaa', fontSize: '0.8rem' }}>
+            {brief ? 'Read full brief →' : 'Coming tomorrow'}
+          </span>
+        </a>
         <a
           href="/log"
           style={{
