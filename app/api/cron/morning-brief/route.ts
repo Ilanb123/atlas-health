@@ -65,12 +65,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: insertError?.message ?? 'insert failed' }, { status: 500 });
   }
 
-  const { sid, status } = await sendWhatsApp(`whatsapp:${whatsappTo}`, whatsappText);
+  try {
+    console.log('[morning-brief] sending WhatsApp to whatsapp:', whatsappTo);
+    const { sid, status } = await sendWhatsApp(`whatsapp:${whatsappTo}`, whatsappText);
+    console.log('[morning-brief] WhatsApp sent, sid:', sid, 'status:', status);
 
-  await supabase
-    .from('morning_briefs')
-    .update({ sent_at: new Date().toISOString(), whatsapp_sid: sid })
-    .eq('id', row.id);
+    await supabase
+      .from('morning_briefs')
+      .update({ sent_at: new Date().toISOString(), whatsapp_sid: sid })
+      .eq('id', row.id);
 
-  return NextResponse.json({ success: true, brief_id: row.id, whatsapp_sid: sid, whatsapp_status: status });
+    return NextResponse.json({ success: true, brief_id: row.id, whatsapp_sid: sid, whatsapp_status: status });
+  } catch (err) {
+    const twilioError = err instanceof Error ? err.message : String(err);
+    console.error('[morning-brief] Twilio send failed:', twilioError);
+    return NextResponse.json({ success: false, brief_id: row.id, twilio_error: twilioError }, { status: 500 });
+  }
 }

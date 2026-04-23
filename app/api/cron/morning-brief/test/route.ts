@@ -13,6 +13,16 @@ function supabaseAdmin() {
 export async function POST() {
   const userId = process.env.ATLAS_ALPHA_USER_ID;
   const whatsappTo = process.env.ATLAS_ALPHA_USER_WHATSAPP;
+
+  // Log env var presence (not values)
+  console.log('[morning-brief/test] env check:', {
+    ATLAS_ALPHA_USER_ID: !!userId,
+    ATLAS_ALPHA_USER_WHATSAPP: !!whatsappTo,
+    TWILIO_ACCOUNT_SID: !!process.env.TWILIO_ACCOUNT_SID,
+    TWILIO_AUTH_TOKEN: !!process.env.TWILIO_AUTH_TOKEN,
+    TWILIO_WHATSAPP_NUMBER: !!process.env.TWILIO_WHATSAPP_NUMBER,
+  });
+
   if (!userId) return NextResponse.json({ error: 'Missing ATLAS_ALPHA_USER_ID' }, { status: 500 });
   if (!whatsappTo) return NextResponse.json({ error: 'Missing ATLAS_ALPHA_USER_WHATSAPP' }, { status: 500 });
 
@@ -23,6 +33,7 @@ export async function POST() {
   console.log('[morning-brief/test] generated in', latencyMs, 'ms, tools:', toolsCalled.join(','), 'tokens:', tokensUsed.total);
 
   const whatsappText = brief.whatsapp_text.replace('{DEEP_LINK}', DEEP_LINK);
+  console.log('[morning-brief/test] whatsapp_text length:', whatsappText.length);
 
   const supabase = supabaseAdmin();
   const { data: row, error: insertError } = await supabase
@@ -46,18 +57,34 @@ export async function POST() {
     return NextResponse.json({ error: insertError?.message ?? 'insert failed' }, { status: 500 });
   }
 
-  const { sid, status } = await sendWhatsApp(`whatsapp:${whatsappTo}`, whatsappText);
+  let twilioSid: string | null = null;
+  let twilioStatus: string | null = null;
+  let twilioError: string | null = null;
 
-  await supabase
-    .from('morning_briefs')
-    .update({ sent_at: new Date().toISOString(), whatsapp_sid: sid })
-    .eq('id', row.id);
+  try {
+    console.log('[morning-brief/test] sending WhatsApp to whatsapp:', whatsappTo, 'from:', process.env.TWILIO_WHATSAPP_NUMBER);
+    const { sid, status } = await sendWhatsApp(`whatsapp:${whatsappTo}`, whatsappText);
+    twilioSid = sid;
+    twilioStatus = status;
+    console.log('[morning-brief/test] WhatsApp sent, sid:', sid, 'status:', status);
+
+    await supabase
+      .from('morning_briefs')
+      .update({ sent_at: new Date().toISOString(), whatsapp_sid: sid })
+      .eq('id', row.id);
+  } catch (err) {
+    twilioError = err instanceof Error ? err.message : String(err);
+    console.error('[morning-brief/test] Twilio send failed:', twilioError);
+  }
 
   return NextResponse.json({
-    success: true,
+    success: !twilioError,
     brief_id: row.id,
-    whatsapp_sid: sid,
-    whatsapp_status: status,
+    whatsapp_sid: twilioSid,
+    whatsapp_status: twilioStatus,
+    twilio_error: twilioError,
+    whatsapp_text: whatsappText,
+    whatsapp_text_length: whatsappText.length,
     brief,
     toolsCalled,
     latencyMs,
